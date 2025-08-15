@@ -14,6 +14,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Box<TransactionModel> transactionBox;
   late Box<double> balanceBox;
+  int? _recentlyDeletedKey;
+  TransactionModel? _recentlyDeleted;
 
   @override
   void initState() {
@@ -26,10 +28,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   double get balance => balanceBox.get('balance', defaultValue: 0.0)!;
-  double get totalIncome =>
-      transactionBox.values.where((t) => t.isIncome).fold(0, (sum, t) => sum + t.amount);
-  double get totalExpense =>
-      transactionBox.values.where((t) => !t.isIncome).fold(0, (sum, t) => sum + t.amount);
+  double get totalIncome => transactionBox.values
+      .where((t) => t.isIncome)
+      .fold(0, (sum, t) => sum + t.amount);
+  double get totalExpense => transactionBox.values
+      .where((t) => !t.isIncome)
+      .fold(0, (sum, t) => sum + t.amount);
 
   void _updateBalance(double amount, bool isIncome, {bool reverse = false}) {
     double currentBalance = balanceBox.get('balance')!;
@@ -42,10 +46,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _deleteTransaction(int index) {
-    final deletedTransaction = transactionBox.getAt(index)!;
+    final key = transactionBox.keyAt(index); // Get stable key
+    final deletedTransaction = transactionBox.get(key);
 
-    transactionBox.deleteAt(index);
-    _updateBalance(deletedTransaction.amount, deletedTransaction.isIncome, reverse: true);
+    if (deletedTransaction == null) return;
+
+    _recentlyDeletedKey = key as int;
+    _recentlyDeleted = deletedTransaction;
+
+    transactionBox.delete(key);
+    _updateBalance(
+      deletedTransaction.amount,
+      deletedTransaction.isIncome,
+      reverse: true,
+    );
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -53,16 +67,25 @@ class _HomeScreenState extends State<HomeScreen> {
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
           label: "Undo",
-          onPressed: () {
-            final transactions = transactionBox.values.toList();
-            transactions.insert(index, deletedTransaction);
-            transactionBox.clear();
-            transactionBox.addAll(transactions);
-            _updateBalance(deletedTransaction.amount, deletedTransaction.isIncome);
-          },
+          onPressed: _undoDelete,
         ),
       ),
     );
+  }
+
+  void _undoDelete() {
+    if (_recentlyDeleted != null && _recentlyDeletedKey != null) {
+      transactionBox.put(
+        _recentlyDeletedKey!,
+        _recentlyDeleted!,
+      );
+      _updateBalance(
+        _recentlyDeleted!.amount,
+        _recentlyDeleted!.isIncome,
+      );
+      _recentlyDeleted = null;
+      _recentlyDeletedKey = null;
+    }
   }
 
   void _addBalanceManually() async {
@@ -71,7 +94,8 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Add Initial Balance", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("Add Initial Balance",
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
@@ -89,14 +113,16 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pop(ctx);
               setState(() {});
             },
-            child: const Text("Add", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text("Add",
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryCard(String title, double amount, Color color, IconData icon) {
+  Widget _buildSummaryCard(
+      String title, double amount, Color color, IconData icon) {
     return Container(
       width: 150,
       margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -108,7 +134,12 @@ class _HomeScreenState extends State<HomeScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))],
+        boxShadow: [
+          BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 5))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,7 +149,10 @@ class _HomeScreenState extends State<HomeScreen> {
           Text(title, style: const TextStyle(color: Colors.white70)),
           const SizedBox(height: 5),
           Text("\$${amount.toStringAsFixed(2)}",
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18)),
         ],
       ),
     );
@@ -129,7 +163,8 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title:
+            Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,7 +175,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Close")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("Close")),
         ],
       ),
     );
@@ -152,7 +188,8 @@ class _HomeScreenState extends State<HomeScreen> {
       child: BarChart(
         BarChartData(
           titlesData: FlTitlesData(
-            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
+            leftTitles: AxisTitles(
+                sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
@@ -171,8 +208,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           borderData: FlBorderData(show: false),
           barGroups: [
-            BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: totalIncome, color: Colors.green, width: 30)]),
-            BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: totalExpense, color: Colors.red, width: 30)]),
+            BarChartGroupData(x: 0, barRods: [
+              BarChartRodData(toY: totalIncome, color: Colors.green, width: 30)
+            ]),
+            BarChartGroupData(x: 1, barRods: [
+              BarChartRodData(toY: totalExpense, color: Colors.red, width: 30)
+            ]),
           ],
         ),
       ),
@@ -188,7 +229,9 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.blueAccent,
         elevation: 0,
         actions: [
-          IconButton(icon: const Icon(Icons.account_balance_wallet), onPressed: _addBalanceManually),
+          IconButton(
+              icon: const Icon(Icons.account_balance_wallet),
+              onPressed: _addBalanceManually),
         ],
       ),
       body: SingleChildScrollView(
@@ -205,9 +248,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     return ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        _buildSummaryCard("Income", totalIncome, Colors.green, Icons.arrow_downward),
-                        _buildSummaryCard("Expense", totalExpense, Colors.red, Icons.arrow_upward),
-                        _buildSummaryCard("Balance", balance, Colors.blue, Icons.account_balance_wallet),
+                        _buildSummaryCard("Income", totalIncome, Colors.green,
+                            Icons.arrow_downward),
+                        _buildSummaryCard("Expense", totalExpense, Colors.red,
+                            Icons.arrow_upward),
+                        _buildSummaryCard("Balance", balance, Colors.blue,
+                            Icons.account_balance_wallet),
                       ],
                     );
                   },
@@ -224,7 +270,9 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 20),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text("Transactions", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                child: Text("Transactions",
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 10),
 
@@ -236,7 +284,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     return const Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 24.0),
-                        child: Text("No transactions added.", style: TextStyle(fontSize: 16, color: Colors.grey)),
+                        child: Text("No transactions added.",
+                            style: TextStyle(fontSize: 16, color: Colors.grey)),
                       ),
                     );
                   }
@@ -253,20 +302,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         background: Container(
                           padding: const EdgeInsets.only(right: 20),
                           alignment: Alignment.centerRight,
-                          decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(15)),
+                          decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(15)),
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
                         child: Card(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15)),
                           elevation: 4,
                           margin: const EdgeInsets.symmetric(vertical: 6),
                           child: ListTile(
                             onTap: () => _viewTransaction(t),
                             leading: CircleAvatar(
-                              backgroundColor: t.isIncome ? Colors.green : Colors.red,
-                              child: Icon(t.isIncome ? Icons.arrow_downward : Icons.arrow_upward, color: Colors.white),
+                              backgroundColor:
+                                  t.isIncome ? Colors.green : Colors.red,
+                              child: Icon(
+                                  t.isIncome
+                                      ? Icons.arrow_downward
+                                      : Icons.arrow_upward,
+                                  color: Colors.white),
                             ),
-                            title: Text(t.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            title: Text(t.title,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold)),
                             subtitle: Text("${t.date.toLocal()}".split(' ')[0]),
                             trailing: Text(
                               "\$${t.amount.toStringAsFixed(2)}",
@@ -292,7 +351,8 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: () async {
           final newTransaction = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AddTransactionScreen()),
+            MaterialPageRoute(
+                builder: (context) => const AddTransactionScreen()),
           );
           if (newTransaction != null) {
             transactionBox.add(newTransaction);
